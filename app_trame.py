@@ -84,9 +84,10 @@ with SinglePageLayout(server) as layout:
 
 # 本番環境
 if __name__ == "__main__":
-    is_render = "RENDER" in os.environ or "PORT" in os.environ
+    is_render = "PORT" in os.environ          # Render だと PORT が必ず入る
     server.start(
-        address="0.0.0.0",
+        host="0.0.0.0",                       # ← ここが本当に重要!
         port=int(os.environ.get("PORT", 8080)),
-        **({"exec_mode": "prod"} if is_render else {})
+        open_browser=not is_render            # ローカルだけ自動で開く
     )
+
