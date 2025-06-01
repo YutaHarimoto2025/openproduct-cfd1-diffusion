@@ -1,3 +1,6 @@
-trame[full]
+trame
+trame-vuetify
+trame-vtk
 pyvista
 numpy
+scipy
