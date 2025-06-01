@@ -1,53 +1,85 @@
-import os, threading
+import os, asyncio
 import numpy as np
 import pyvista as pv
 from trame.app import get_server
 from trame.ui.vuetify3 import SinglePageLayout
+from trame.widgets import vuetify3 as v3
 from pyvista.trame.ui import plotter_ui
 from diffusion import step
 
-# ---- 初期データ ----
 NX, NY = 100, 100
-u = np.zeros((NY, NX), dtype=np.float32)
-u[NY//2, NX//2] = 10.0  # 中央熱源
+def make_initial_u():
+    u0 = np.zeros((NY, NX), np.float32)
+    u0[40:60, 40:60] = 10.0
+    return u0
 
-# ---- PyVista グリッド ----
-grid = pv.ImageData(dimensions=(NX, NY, 1), spacing=(1, 1, 1), origin=(0, 0, 0))
-grid.point_data["u"] = u.ravel(order="F")
+u = make_initial_u()
 
+# ------------ StructuredGrid --------------
+def make_grid(u):
+    x, y = np.meshgrid(np.arange(NX), np.arange(NY), indexing="ij")
+    z = u.copy()
+    g = pv.StructuredGrid(x, y, z)
+    g["u"] = u.ravel(order="F")
+    return g
+
+grid = make_grid(u)
+
+def update_grid(u):
+    z_flat = u.ravel(order="F")
+    pts = grid.points.copy()
+    pts[:, 2] = z_flat
+    grid.points = pts
+    grid["u"] = z_flat          # 色も更新
+
+# ------------ Plotter ---------------------
 plotter = pv.Plotter(off_screen=True)
-plotter.add_mesh(grid, scalars="u", cmap="inferno")
-plotter.view_xy()
+actor = plotter.add_mesh(
+    grid, scalars="u", cmap="viridis", clim=[0, 10],
+    scalar_bar_args={"title": "温度", "vertical": True}
+)
+plotter.view_xy();  plotter.camera.zoom(1.5)
 
-# ---- Trame サーバ ----
+# ------------ Trame -----------------------
 server = get_server()
 state, ctrl = server.state, server.controller
-
-# 再生ループ用フラグ
 state.running = False
-def _loop():
+
+def step_loop():
     if state.running:
-        # 1ステップ計算
         global u
-        u = step(u)
-        grid.point_data["u"] = u.ravel(order="F")
+        for _ in range(5):     
+            u = step(u)
+        update_grid(u)
         ctrl.view_update()
-        # 0.1 秒後に再度スケジュール
-        threading.Timer(0.1, _loop).start()
+        asyncio.get_event_loop().call_later(0.1, step_loop)
 
 @ctrl.add("play_pause")
 def toggle_play():
     state.running = not state.running
+    state.dirty("running");  ctrl.view_update()
     if state.running:
-        _loop()
+        asyncio.get_event_loop().call_later(0.1, step_loop)
 
+@ctrl.add("reset")
+def reset():
+    global u
+    u = make_initial_u()
+    update_grid(u)
+    state.running = False
+    state.dirty("running");  ctrl.view_update()
+
+# ------------ UI --------------------------
 with SinglePageLayout(server) as layout:
     layout.title.set_text("Diffusion Demo")
+    layout.icon.clear()                             # 右上の自動ボタン除去
     with layout.toolbar:
-        layout.toolbar.add_btn(icon="mdi-play-pause", click=ctrl.play_pause)
+        v3.VBtn(icon=True, click=ctrl.play_pause, children=[
+            v3.VIcon("mdi-pause" if state.running else "mdi-play")
+        ])
+        v3.VBtn(icon=True, click=ctrl.reset, children=[ v3.VIcon("mdi-reload") ])
     with layout.content:
-        view = plotter_ui(plotter)
+        view = plotter_ui(plotter, toolbar=False)   # ← 内部ツールバー無効
         ctrl.view_update = view.update
 
-# Render 用ポート取得
 server.start(address="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
