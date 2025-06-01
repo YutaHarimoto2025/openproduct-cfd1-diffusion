@@ -82,11 +82,11 @@ with SinglePageLayout(server) as layout:
         view = plotter_ui(plotter, toolbar=False)   # ← 内部ツールバー無効
         ctrl.view_update = view.update
 
-# server.start(address="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
-
+# 本番環境
 if __name__ == "__main__":
+    is_render = "RENDER" in os.environ or "PORT" in os.environ
     server.start(
         address="0.0.0.0",
         port=int(os.environ.get("PORT", 8080)),
-        exec_mode="prod",
+        **({"exec_mode": "prod"} if is_render else {})
     )
