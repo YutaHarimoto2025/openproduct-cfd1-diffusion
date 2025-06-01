@@ -1,0 +1,3 @@
+trame[full]
+pyvista
+numpy
