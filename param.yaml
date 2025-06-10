@@ -1,0 +1,18 @@
+nx: 100
+ny: 100
+
+eqtype: # diffusion/ wave
+init_xlim: [40, 60]
+init_ylim: [40, 60]
+init_hotvalue: 50.0
+
+step_per_frame: 10
+
+camera_position: [60, 60, 120]
+camera_focal_point: [50, 50, 0]
+camera_view_up: [0, 1, 0]
+camera_zoom: 1.5
+
+cmap: viridis
+clim: [0.0, 10.0]
+
